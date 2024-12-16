@@ -43,11 +43,11 @@ module lcd_init (
     reg [39:0]  second_row;
     reg [2:0]   char_index;
 
-    parameter S2    = 200000000;
-    parameter M30   =   3000000;
-    parameter M6    =    600000;
-    parameter M1    =    100000;
-    parameter U400  =     40000;
+    parameter S2    = 20000000;
+    parameter M30   =  3000000;
+    parameter M6    =   600000;
+    parameter M1    =   100000;
+    parameter U400  =    40000;
 
     // Helper task for repeated patterns
     task handle_state;
@@ -219,7 +219,7 @@ module lcd_init (
                 end
 
                 CLEAR_NAME_DELAY: begin
-                    if (delay_counter == S2) begin
+                    if (delay_counter == U400) begin
                         rs <= 1'b0;
                         state <= CLEAR_NAME;
                         flag <= 1;

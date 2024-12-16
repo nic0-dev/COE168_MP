@@ -43,31 +43,12 @@ module lcd_init (
     reg [39:0]  second_row;
     reg [2:0]   char_index;
 
-    parameter S2    = 200000000;
-    parameter M30   =   3000000;
-    parameter M6    =    600000;
-    parameter M1    =    100000;
-    parameter U400  =     40000;
-
-    // Helper task for repeated patterns
-    task handle_state;
-        input [3:0] upper;
-        input [3:0] lower;
-        input [5:0] next;
-        begin
-            if (delay_counter == U400) begin
-                data <= (flag) ? upper : lower;
-                next_state <= (flag) ? state : next;
-                state <= ENABLE;
-                next_flag <= ~flag;
-                flag <= 1;
-                delay_counter <= 0;
-            end else begin
-                delay_counter <= delay_counter + 1;
-            end
-        end
-    endtask
-
+    parameter S2    = 20000000;
+    parameter M30   =  3000000;
+    parameter M6    =   600000;
+    parameter M1    =   100000;
+    parameter U400  =    40000;
+    
     always @(posedge clk or negedge nrst) begin
         if (!nrst) begin
             first_row  = {8'b01001101, 8'b01000001, 8'b01010010, 8'b01001011};
@@ -84,9 +65,10 @@ module lcd_init (
         end else begin
             case (state)
                 ENABLE: begin
-                    if (flag) begin // Assert Enable after 400us
+                    if(flag == 1) begin // Assert Enable after 400us
                         if (delay_counter == U400) begin
                             en <= 1'b1;
+                            state <= ENABLE;
                             delay_counter <= 0;
                             flag <= 0;  
                         end else begin
@@ -117,11 +99,70 @@ module lcd_init (
                     end
                 end
 
-                FS_NF: handle_state(4'b0010, 4'b1000, DISPLAY_OFF);
-                DISPLAY_OFF: handle_state(4'b0000, 4'b1000, CLEAR_DISPLAY);
-                CLEAR_DISPLAY: handle_state(4'b0000, 4'b0001, ENTRY_MODE);
-                ENTRY_MODE: handle_state(4'b0000, 4'b0110, DISPLAY_ON);
-                DISPLAY_ON: handle_state(4'b0000, 4'b1111, FN_DELAY);
+                FS_NF: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0010 : 4'b1000; 
+                        next_state <= (flag == 1) ? state : state + 1;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
+
+                DISPLAY_OFF: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0000 : 4'b1000; 
+                        next_state <= (flag == 1) ? state : state + 1;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
+
+                CLEAR_DISPLAY: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0000 : 4'b0001; 
+                        next_state <= (flag == 1) ? state : state + 1;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
+
+                ENTRY_MODE: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0000 : 4'b0110; 
+                        next_state <= (flag == 1) ? state : state + 1;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
+
+                DISPLAY_ON: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0000 : 4'b1111; 
+                        next_state <= (flag == 1) ? state : state + 1;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
 
                 FN_DELAY, LN_DELAY: begin // Assert RS
                     if (delay_counter == U400) begin
@@ -135,7 +176,7 @@ module lcd_init (
                     end
                 end
 
-                FIRST_NAME: begin
+                FIRST_NAME: begin // MARK
                     if (delay_counter == U400) begin
                         if (flag == 1) begin            // Upper
                             case (char_index)
@@ -169,7 +210,7 @@ module lcd_init (
                     end
                 end
 
-                NEXT_LINE_DELAY: begin
+                NEXT_LINE_DELAY: begin // Deassert RS
                     if (delay_counter == U400) begin
                         rs <= 1'b0;
                         state <= NEXT_LINE;
@@ -180,9 +221,20 @@ module lcd_init (
                     end
                 end
 
-                NEXT_LINE: handle_state(4'b1100, 4'b0000, LN_DELAY);
+                NEXT_LINE: begin // Head of 2nd line
+                    if (delay_counter == (flag == 1) ? U400  : M1) begin
+                        data <= (flag == 1)? 4'b1100 : 4'b0000;
+                        state <= ENABLE;
+                        next_state <= (flag == 1) ? NEXT_LINE : LN_DELAY; 
+                        next_flag <= ~flag;         
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
 
-                LAST_NAME: begin
+                LAST_NAME: begin // CAGAS
                     if (delay_counter == U400) begin
                         if (flag == 1) begin            // Upper
                             case (char_index)
@@ -218,8 +270,8 @@ module lcd_init (
                     end
                 end
 
-                CLEAR_NAME_DELAY: begin
-                    if (delay_counter == S2) begin
+                CLEAR_NAME_DELAY: begin // Deassert RS
+                    if (delay_counter == U400) begin
                         rs <= 1'b0;
                         state <= CLEAR_NAME;
                         flag <= 1;
@@ -229,7 +281,18 @@ module lcd_init (
                     end
                 end
 
-                CLEAR_NAME: handle_state(4'b0000, 4'b0001, DONE);
+                CLEAR_NAME: begin
+                    if (delay_counter == U400) begin
+                        data <= (flag == 1) ? 4'b0000 : 4'b0001; 
+                        next_state <= (flag == 1) ? CLEAR_NAME : DONE;
+                        state <= ENABLE;
+                        next_flag <= ~flag;
+                        flag <= 1;
+                        delay_counter <= 0;
+                    end else begin 
+                        delay_counter <= delay_counter + 1;
+                    end
+                end
 
                 DONE: begin
                     if (delay_counter == U400) begin
