@@ -1,3 +1,4 @@
+
 `timescale 1ns / 1ps
 
 module lcd_init (
@@ -43,7 +44,7 @@ module lcd_init (
     reg [39:0]  second_row;
     reg [2:0]   char_index;
 
-    parameter S2    = 200000000;
+    parameter S2    = 199500000;
     parameter M30   =   3000000;
     parameter M6    =    600000;
     parameter M1    =    100000;
