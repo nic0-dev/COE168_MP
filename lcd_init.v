@@ -13,6 +13,7 @@ module lcd_init (
     output reg rs,
     output reg rw,
     output reg en
+//    output reg [6:0] curr_addr
 );
     localparam 
         FS_8bit1            = 5'd0,
@@ -33,7 +34,9 @@ module lcd_init (
         CLEAR_NAME_DELAY    = 5'd15,
         CLEAR_NAME          = 5'd16,  
         ENABLE              = 5'd17,
-        DONE                = 5'd18;
+        DONE                = 5'd18,
+        TYPE_MODE           = 5'd19,
+        BROWSE              = 5'd20;
 
     reg [5:0]   state;
     reg [5:0]   next_state;
@@ -43,8 +46,14 @@ module lcd_init (
     reg [31:0]  first_row;
     reg [39:0]  second_row;
     reg [2:0]   char_index;
+    reg [6:0]   curr_addr;
+    reg         btn0_pressed;
+    reg         btn2_pressed;
+    reg         btn3_pressed;
+    reg         pressed;
 
-    parameter S2    = 199500000;
+    parameter S2    = 199400000;
+//    parameter S2    =   1500000;
     parameter M30   =   3000000;
     parameter M6    =    600000;
     parameter M1    =    100000;
@@ -56,8 +65,7 @@ module lcd_init (
         input [3:0] lower;
         input [5:0] next;
         begin
-            if ((state != CLEAR_NAME_DELAY && delay_counter == U400) || 
-            (state == CLEAR_NAME_DELAY && delay_counter == S2)) begin
+            if (delay_counter == U400) begin
                 data <= (flag) ? upper : lower;
                 next_state <= (flag) ? state : next;
                 state <= ENABLE;
@@ -83,6 +91,11 @@ module lcd_init (
             flag            <= 1;
             next_flag       <= 1;
             char_index      <= 0;
+            curr_addr       <= 7'h0;
+            btn0_pressed    <= 0;
+            btn2_pressed    <= 0;
+            btn3_pressed    <= 0;
+            pressed         <= 0;
         end else begin
             case (state)
                 ENABLE: begin
@@ -237,14 +250,69 @@ module lcd_init (
                     if (delay_counter == U400) begin
                         data <= 4'b0000;
                         state <= ENABLE;
-                        next_state <= DONE;
-                        next_flag <= 0;
+                        next_state <= TYPE_MODE;
+                        next_flag <= 1;
                         flag <= 1;
                         delay_counter <= 0;
                     end else begin
                         delay_counter <= delay_counter + 1;
                     end
                 end
+
+                TYPE_MODE: begin
+                    if (sw0) begin // Move Cursor
+                        if (btn0) begin
+                            btn0_pressed <= 1;
+                        end else if (btn2) begin
+                            btn2_pressed <= 1;
+                        end else if (btn3) begin
+                            btn3_pressed <= 1;
+                        end
+                        if (!btn2 && btn2_pressed) begin // Move Right
+                            if (curr_addr == 7'h27) begin
+                                curr_addr <= 7'h40;
+                            end else if (curr_addr == 7'h67) begin
+                                curr_addr <= 7'h0;
+                            end else begin
+                                curr_addr <= curr_addr + 7'h1;
+                            end 
+                            state <= BROWSE;
+                            flag <= 1;
+                            next_flag <= 1;
+                            delay_counter <= 0;
+                            btn2_pressed <= 0;
+                            rs <= 0;
+                        end else if (!btn3 && btn3_pressed) begin // Move Left
+                            if (curr_addr == 7'h0) begin
+                                curr_addr <= 7'h67;
+                            end else if (curr_addr == 7'h40) begin
+                                curr_addr <= 7'h27;
+                            end else begin
+                                curr_addr = curr_addr - 7'h1;
+                            end 
+                            state <= BROWSE;
+                            flag <= 1;
+                            next_flag <= 1;
+                            delay_counter <= 0;
+                            btn3_pressed <= 0;
+                            rs <= 0;
+                        end else if (!btn0 && btn0_pressed) begin
+                            if (curr_addr < 7'h28) begin
+                                curr_addr <= curr_addr + 7'h40;
+                            end else begin
+                                curr_addr <= curr_addr - 7'h40;
+                            end
+                            state <= BROWSE;
+                            flag <= 1;
+                            next_flag <= 1;
+                            delay_counter <= 0;
+                            btn0_pressed <= 0;
+                            rs <= 0;
+                        end
+                    end
+                end
+                
+                BROWSE: handle_state(curr_addr[3:0], {1'b1, curr_addr[6:4]}, TYPE_MODE);
             endcase
         end
     end
