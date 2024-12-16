@@ -55,7 +55,8 @@ module lcd_init (
         input [3:0] lower;
         input [5:0] next;
         begin
-            if (delay_counter == U400) begin
+            if ((state != CLEAR_NAME_DELAY && delay_counter == U400) || 
+            (state == CLEAR_NAME_DELAY && delay_counter == S2)) begin
                 data <= (flag) ? upper : lower;
                 next_state <= (flag) ? state : next;
                 state <= ENABLE;
